@@ -1,0 +1,51 @@
+name: Build Secure EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, security-hardening ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout secure build repo
+        uses: actions/checkout@v4
+
+      - name: Prepare hardened source
+        shell: pwsh
+        run: ./build-secure.ps1
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore packages
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream/RBX Alt Manager
+        run: nuget restore 'RBX Alt Manager.csproj'
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          $solution = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream/RBX Alt Manager.sln'
+          msbuild $solution /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      - name: Collect EXE
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
+          $exe = Get-ChildItem $root -Recurse -Filter '*.exe' | Where-Object { $_.FullName -match 'bin\\Release' } | Select-Object -First 1
+          if (-not $exe) { throw 'Release EXE was not produced.' }
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item $exe.FullName 'artifact/Roblox-Account-Manager-Secure.exe'
+          Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256 | Format-List
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roblox-Account-Manager-Secure
+          path: artifact/Roblox-Account-Manager-Secure.exe
+          if-no-files-found: error
