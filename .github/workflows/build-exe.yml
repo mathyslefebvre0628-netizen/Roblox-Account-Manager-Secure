@@ -50,8 +50,9 @@ jobs:
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
-          $exe = Get-ChildItem $root -Recurse -Filter '*.exe' | Where-Object { $_.FullName -match 'bin\\Release' -and $_.Name -notmatch 'vshost' } | Select-Object -First 1
-          if (-not $exe) { throw 'Release EXE was not produced.' }
+          $buildRoot = Join-Path $root 'build\Release'
+          $exe = Get-ChildItem $buildRoot -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'vshost' } | Select-Object -First 1
+          if (-not $exe) { throw "Release EXE was not produced under $buildRoot." }
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item $exe.FullName 'artifact/Roblox-Account-Manager-Secure.exe'
           $hash = Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256
