@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout secure build repo
         uses: actions/checkout@v4
@@ -22,26 +23,28 @@ jobs:
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      - name: Restore packages
+      - name: Restore solution packages
         shell: pwsh
-        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream/RBX Alt Manager
-        run: nuget restore 'RBX Alt Manager.csproj' -SolutionDirectory "${{ runner.temp }}/roblox-account-manager-upstream"
+        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
+        run: |
+          nuget restore '.\RBX Alt Manager.sln' -NonInteractive -Verbosity detailed -NoCache
 
       - name: Build Release
         shell: pwsh
+        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
         run: |
-          $solution = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream/RBX Alt Manager.sln'
-          msbuild $solution /p:Configuration=Release /p:Platform="Any CPU" /m
+          msbuild '.\RBX Alt Manager.sln' /p:Configuration=Release /p:Platform="Any CPU" /p:RestorePackagesConfig=true /m /v:minimal
 
       - name: Collect EXE
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
-          $exe = Get-ChildItem $root -Recurse -Filter '*.exe' | Where-Object { $_.FullName -match 'bin\\Release' } | Select-Object -First 1
+          $exe = Get-ChildItem $root -Recurse -Filter '*.exe' | Where-Object { $_.FullName -match 'bin\\Release' -and $_.Name -notmatch 'vshost' } | Select-Object -First 1
           if (-not $exe) { throw 'Release EXE was not produced.' }
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item $exe.FullName 'artifact/Roblox-Account-Manager-Secure.exe'
-          Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256 | Format-List
+          $hash = Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256
+          $hash | Format-List
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
