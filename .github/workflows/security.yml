@@ -14,12 +14,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Scan tracked files for obvious credential material
+      - name: Scan tracked files for actual credential material
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -I -E '(\.ROBLOSECURITY|AccountData\.json|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)' -- . ':!SECURITY.md'; then
-            echo 'Potential secret or credential material found in tracked files.'
+          if git ls-files | grep -E '(^|/)(AccountData\.json|[^/]*\.ROBLOSECURITY)$'; then
+            echo 'Tracked account/session files found.'
+            exit 1
+          fi
+          if git grep -n -I -E '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|password[[:space:]]*[:=][[:space:]]*[^[:space:];]{8,}|Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,})' -- ':!SECURITY.md' ':!.github/workflows/security.yml'; then
+            echo 'Potential credential material found in tracked files.'
             exit 1
           fi
 
