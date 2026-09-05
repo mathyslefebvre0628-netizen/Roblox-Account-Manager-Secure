@@ -43,7 +43,10 @@ jobs:
         shell: pwsh
         working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
         run: |
-          & $env:MSBUILD_PATH '.\RBX Alt Manager.sln' /p:Configuration=Release /p:Platform="Any CPU" /p:RestorePackagesConfig=true /m /v:minimal
+          # The archived project has a post-build event that overwrites the real
+          # WinForms executable with a 4 KB launcher. Disable that event for the
+          # secure distribution build so the actual application binary is kept.
+          & $env:MSBUILD_PATH '.\RBX Alt Manager.sln' /p:Configuration=Release /p:Platform="Any CPU" /p:PostBuildEvent= /p:RestorePackagesConfig=true /m /v:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Collect EXE
@@ -51,8 +54,16 @@ jobs:
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
           $buildRoot = Join-Path $root 'build\Release'
-          $exe = Get-ChildItem $buildRoot -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch 'vshost' } | Select-Object -First 1
-          if (-not $exe) { throw "Release EXE was not produced under $buildRoot." }
+          $exe = Get-ChildItem $buildRoot -Recurse -File -Filter 'Roblox Account Manager.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            Get-ChildItem $buildRoot -Recurse -File -Filter '*.exe' -ErrorAction SilentlyContinue |
+              Select-Object FullName, Length | Format-Table -AutoSize | Out-String | Write-Host
+            throw "Roblox Account Manager.exe was not produced under $buildRoot."
+          }
+          Write-Host "Candidate: $($exe.FullName) ($($exe.Length) bytes)"
+          if ($exe.Length -lt 100KB) {
+            throw "Refusing to package an unexpectedly small executable: $($exe.Length) bytes."
+          }
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
           Copy-Item $exe.FullName 'artifact/Roblox-Account-Manager-Secure.exe'
           $hash = Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256
