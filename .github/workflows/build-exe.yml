@@ -25,7 +25,7 @@ jobs:
       - name: Restore packages
         shell: pwsh
         working-directory: ${{ runner.temp }}/roblox-account-manager-upstream/RBX Alt Manager
-        run: nuget restore 'RBX Alt Manager.csproj'
+        run: nuget restore 'RBX Alt Manager.csproj' -SolutionDirectory "${{ runner.temp }}/roblox-account-manager-upstream"
 
       - name: Build Release
         shell: pwsh
