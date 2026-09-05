@@ -27,7 +27,8 @@ jobs:
         shell: pwsh
         working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
         run: |
-          nuget restore '.\RBX Alt Manager.sln' -NonInteractive -Verbosity minimal
+          nuget restore '.\RBX Alt Manager.sln' -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Locate MSBuild
         shell: pwsh
