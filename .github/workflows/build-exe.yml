@@ -1,0 +1,78 @@
+name: Build Secure EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, security-hardening ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout secure build repo
+        uses: actions/checkout@v4
+
+      - name: Prepare hardened source
+        shell: pwsh
+        run: ./build-secure.ps1
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore solution packages
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
+        run: |
+          nuget restore '.\RBX Alt Manager.sln' -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Locate MSBuild
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'MSBuild executable was not found on the Windows runner.' }
+          "MSBUILD_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using $msbuild"
+
+      - name: Build Release
+        shell: pwsh
+        working-directory: ${{ runner.temp }}/roblox-account-manager-upstream
+        run: |
+          # The archived project has a post-build event that overwrites the real
+          # WinForms executable with a 4 KB launcher. Disable that event for the
+          # secure distribution build so the actual application binary is kept.
+          & $env:MSBUILD_PATH '.\RBX Alt Manager.sln' /p:Configuration=Release /p:Platform="Any CPU" /p:PostBuildEvent= /p:RestorePackagesConfig=true /m /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect EXE
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
+          $buildRoot = Join-Path $root 'build\Release'
+          $exe = Get-ChildItem $buildRoot -Recurse -File -Filter 'Roblox Account Manager.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            Get-ChildItem $buildRoot -Recurse -File -Filter '*.exe' -ErrorAction SilentlyContinue |
+              Select-Object FullName, Length | Format-Table -AutoSize | Out-String | Write-Host
+            throw "Roblox Account Manager.exe was not produced under $buildRoot."
+          }
+          Write-Host "Candidate: $($exe.FullName) ($($exe.Length) bytes)"
+          if ($exe.Length -lt 100KB) {
+            throw "Refusing to package an unexpectedly small executable: $($exe.Length) bytes."
+          }
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item $exe.FullName 'artifact/Roblox-Account-Manager-Secure.exe'
+          $hash = Get-FileHash 'artifact/Roblox-Account-Manager-Secure.exe' -Algorithm SHA256
+          $hash | Format-List
+          $hash.Hash | Set-Content 'artifact/SHA256.txt'
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roblox-Account-Manager-Secure
+          path: artifact/
+          if-no-files-found: error
