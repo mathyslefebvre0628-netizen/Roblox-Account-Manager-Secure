@@ -1,0 +1,38 @@
+name: Security checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan tracked files for obvious credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -I -E '(\.ROBLOSECURITY|AccountData\.json|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)' -- . ':!SECURITY.md'; then
+            echo 'Potential secret or credential material found in tracked files.'
+            exit 1
+          fi
+
+  dotnet-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Discover projects
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Recurse -Filter *.csproj | Select-Object -ExpandProperty FullName
+          if ($projects.Count -eq 0) { Write-Host 'No .csproj found yet; security-only commit.'; exit 0 }
+          $projects | ForEach-Object { dotnet build $_ --configuration Release --no-restore }
