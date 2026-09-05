@@ -163,7 +163,7 @@ namespace RBX_Alt_Manager.Nexus
 
         protected override void OnMessage(MessageEventArgs e)
         {
-            if (e == null || e.Data == null || e.Data.Length > 64 * 1024) { Context.WebSocket.Close(CloseStatusCode.MessageTooBig); return; }
+            if (e == null || e.Data == null || e.Data.Length > 64 * 1024) { Context.WebSocket.Close(CloseStatusCode.TooBig); return; }
             if (AccountControl.Instance.ContextList.TryGetValue(Context, out ControlledAccount account)) account.HandleMessage(e.Data);
         }
 
