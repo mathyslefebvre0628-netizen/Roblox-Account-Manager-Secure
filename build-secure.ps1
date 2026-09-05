@@ -4,6 +4,16 @@ $work = Join-Path $env:RUNNER_TEMP 'roblox-account-manager-upstream'
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 git clone --depth 1 --branch master $upstream $work
 
+# Keep the legacy CefSharp dependency set internally consistent: the project references
+# CefSharp.Common 109.1.110, while upstream packages.config currently lists 117.2.20.
+# Pin Common to the version required by the project and its WinForms integration.
+$packagesConfig = Join-Path $work 'RBX Alt Manager/packages.config'
+if (Test-Path $packagesConfig) {
+    $packagesText = Get-Content $packagesConfig -Raw
+    $packagesText = $packagesText -replace '<package id="CefSharp.Common" version="117\.2\.20"', '<package id="CefSharp.Common" version="109.1.110"'
+    Set-Content -LiteralPath $packagesConfig -Value $packagesText -Encoding UTF8
+}
+
 # Security hardening: replace the legacy WebServer implementation with a localhost-only,
 # authenticated listener. The auth token is supplied at runtime via RAM_API_TOKEN.
 $webServer = @'
