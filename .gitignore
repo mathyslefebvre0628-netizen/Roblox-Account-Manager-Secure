@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+.vs/
+
+# Visual Studio user files
+*.user
+*.suo
+
+# Local account/authentication data
+AccountData.json
+**/AccountData.json
+*.ROBLOSECURITY
+*.cookie
+*.cookies
+
+# Local secrets
+.env
+.env.*
+secrets.json
+appsettings.Local.json
+
+# Logs and crash dumps
+*.log
+logs/
+crashdumps/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
